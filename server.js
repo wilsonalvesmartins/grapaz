@@ -6,176 +6,163 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
-// Configuração de caminhos (ES Modules)
+// --- CONFIGURAÇÕES DO AMBIENTE ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 80; // Rodar na porta 80 para facilitar o acesso na web
+const PORT = 80;
+
+// IMPORTANTE: Define a pasta onde os dados reais vão ficar
+// No Dockerfile, definimos isso como VOLUME para não perder dados
+const DATA_DIR = path.join(process.cwd(), 'data');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const DB_PATH = path.join(DATA_DIR, 'grapaz.db');
+
+// Garante que as pastas existem ao iniciar
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+console.log(`[Painel] Iniciando...`);
+console.log(`[Painel] Banco de Dados: ${DB_PATH}`);
+console.log(`[Painel] Pasta de Uploads: ${UPLOAD_DIR}`);
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
-
-// Servir arquivos estáticos do Frontend (React Build)
+// Serve o site (React)
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// --- BANCO DE DADOS (SQLite) ---
-const dbPath = path.join(__dirname, 'grapaz.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) console.error('Erro ao abrir banco de dados no Painel:', err);
-  else console.log('Banco de dados conectado no Painel: ' + dbPath);
+// --- BANCO DE DADOS ---
+const db = new sqlite3.Database(DB_PATH, (err) => {
+  if (err) {
+    console.error('[Painel] ERRO CRÍTICO ao abrir banco:', err.message);
+  } else {
+    console.log('[Painel] Banco conectado com sucesso.');
+  }
 });
 
-// Criar tabelas e Migrações (Correção para dados sumindo)
+// Inicialização das Tabelas
 db.serialize(() => {
-  // 1. Tabela de Pregões
+  // Tabela Bids
   db.run(`CREATE TABLE IF NOT EXISTS bids (
     id TEXT PRIMARY KEY,
-    orgao TEXT,
-    cidade TEXT,
-    plataforma TEXT,
-    numeroPregao TEXT,
-    processo TEXT,
-    data TEXT,
-    horario TEXT,
-    modalidade TEXT,
-    status TEXT,
-    value REAL,
-    items TEXT,
-    deadlines TEXT, 
-    paymentDeadline TEXT,
-    isPaid INTEGER
+    orgao TEXT, cidade TEXT, plataforma TEXT, numeroPregao TEXT, processo TEXT,
+    data TEXT, horario TEXT, modalidade TEXT, status TEXT, value REAL,
+    items TEXT, deadlines TEXT, paymentDeadline TEXT, isPaid INTEGER
   )`);
 
-  // 2. Tabela de Arquivos
+  // Tabela Files
   db.run(`CREATE TABLE IF NOT EXISTS files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename TEXT,
-    originalName TEXT,
-    type TEXT,
-    createdAt TEXT
+    filename TEXT, originalName TEXT, type TEXT, createdAt TEXT
   )`);
 
-  // 3. Verificação e Migração de Colunas (Se a coluna plataforma não existir, cria ela)
+  // Migração de Segurança: Garante que a coluna plataforma existe
   db.all("PRAGMA table_info(bids)", (err, rows) => {
     if (!err && rows) {
       const hasPlataforma = rows.some(r => r.name === 'plataforma');
       if (!hasPlataforma) {
-        console.log("Migrando banco de dados: Adicionando coluna 'plataforma'...");
-        db.run("ALTER TABLE bids ADD COLUMN plataforma TEXT", (err) => {
-          if (err) console.error("Erro na migração:", err);
-          else console.log("Coluna 'plataforma' adicionada com sucesso.");
+        console.log("[Painel] Atualizando banco antigo: Criando coluna plataforma...");
+        db.run("ALTER TABLE bids ADD COLUMN plataforma TEXT", (e) => {
+          if (e) console.error("Erro na migração:", e);
         });
       }
     }
   });
 });
 
-// --- UPLOAD DE ARQUIVOS (Multer) ---
-// Pasta onde os arquivos ficarão no Painel
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    console.log("Criando pasta de uploads no Painel...");
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
+// --- CONFIGURAÇÃO DE UPLOAD ---
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    // Remove caracteres especiais do nome do arquivo para evitar erros no Linux
+    const cleanName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    cb(null, `${Date.now()}-${cleanName}`);
+  }
 });
 const upload = multer({ storage });
 
-// --- API ENDPOINTS ---
+// --- ROTAS DA API ---
 
 // 1. Listar Pregões
 app.get('/api/bids', (req, res) => {
   db.all("SELECT * FROM bids", [], (err, rows) => {
-    if (err) {
-      console.error("Erro ao buscar pregões:", err);
-      return res.status(500).json({ error: err.message });
-    }
-    // Parse JSON strings de volta para objetos
-    const parsedRows = rows.map(r => ({
+    if (err) return res.status(500).json({ error: err.message });
+    const parsed = rows.map(r => ({
       ...r,
       deadlines: JSON.parse(r.deadlines || '{}'),
       isPaid: !!r.isPaid
     }));
-    res.json(parsedRows);
+    res.json(parsed);
   });
 });
 
-// 2. Criar Pregão
+// 2. Salvar Pregão
 app.post('/api/bids', (req, res) => {
   const bid = req.body;
-  
-  // Garante que todos os campos existam para evitar erro de SQL
-  const params = [
-    bid.id, bid.orgao, bid.cidade, bid.plataforma || '', bid.numeroPregao, bid.processo, 
-    bid.data, bid.horario, bid.modalidade, bid.status, bid.value || 0, bid.items || '', 
-    JSON.stringify(bid.deadlines || {}), bid.paymentDeadline || '', bid.isPaid ? 1 : 0
-  ];
+  console.log(`[Painel] Tentando salvar pregão: ${bid.orgao}`);
 
-  const stmt = db.prepare(`INSERT INTO bids (
+  const stmt = db.prepare(`INSERT OR REPLACE INTO bids (
     id, orgao, cidade, plataforma, numeroPregao, processo, data, horario, 
     modalidade, status, value, items, deadlines, paymentDeadline, isPaid
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  
+
+  const params = [
+    bid.id, bid.orgao, bid.cidade, bid.plataforma || '', bid.numeroPregao, bid.processo,
+    bid.data, bid.horario, bid.modalidade, bid.status, bid.value || 0, bid.items || '',
+    JSON.stringify(bid.deadlines || {}), bid.paymentDeadline || '', bid.isPaid ? 1 : 0
+  ];
+
   stmt.run(params, function(err) {
     if (err) {
-      console.error("Erro ao salvar pregão no Painel:", err);
-      return res.status(500).json({ error: "Erro ao salvar no banco: " + err.message });
+      console.error("[Painel] Erro ao salvar no banco:", err.message);
+      return res.status(500).json({ error: err.message });
     }
+    console.log(`[Painel] Pregão salvo com sucesso. ID: ${bid.id}`);
     res.json(bid);
   });
   stmt.finalize();
 });
 
-// 3. Atualizar Pregão
+// 3. Atualizar
 app.put('/api/bids/:id', (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   
-  // Construção dinâmica da query
-  const fields = Object.keys(updates).filter(k => k !== 'id').map(k => {
-    if (k === 'deadlines') return `deadlines = ?`;
-    if (k === 'isPaid') return `isPaid = ?`;
-    return `${k} = ?`;
+  // Lógica simples de atualização
+  const fields = [], values = [];
+  Object.keys(updates).forEach(key => {
+    if (key === 'id') return;
+    fields.push(`${key} = ?`);
+    if (key === 'deadlines') values.push(JSON.stringify(updates[key]));
+    else if (key === 'isPaid') values.push(updates[key] ? 1 : 0);
+    else values.push(updates[key]);
   });
-  
-  const values = Object.keys(updates).filter(k => k !== 'id').map(k => {
-    if (k === 'deadlines') return JSON.stringify(updates[k]);
-    if (k === 'isPaid') return updates[k] ? 1 : 0;
-    return updates[k];
-  });
-  
-  if (fields.length === 0) return res.json({ success: true }); // Nada a atualizar
+
+  if (fields.length === 0) return res.json({ success: true });
 
   const query = `UPDATE bids SET ${fields.join(', ')} WHERE id = ?`;
-  
-  db.run(query, [...values, id], function(err) {
-    if (err) {
-      console.error("Erro ao atualizar pregão:", err);
-      return res.status(500).json({ error: err.message });
-    }
+  db.run(query, [...values, id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
   });
 });
 
 // 4. Upload de Arquivo
 app.post('/api/upload', upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).send('Nenhum arquivo enviado.');
+  if (!req.file) return res.status(400).send('Arquivo não recebido.');
   
-  const { type } = req.body; // 'entry' ou 'exit'
-  
+  const { type } = req.body;
+  console.log(`[Painel] Arquivo recebido: ${req.file.filename}`);
+
   db.run(`INSERT INTO files (filename, originalName, type, createdAt) VALUES (?, ?, ?, ?)`, 
     [req.file.filename, req.file.originalname, type, new Date().toISOString()],
-    function(err) {
+    (err) => {
       if (err) {
-        console.error("Erro ao salvar metadados do arquivo no banco:", err);
+        console.error("[Painel] Erro ao salvar registro do arquivo:", err);
         return res.status(500).json({ error: err.message });
       }
-      console.log(`Arquivo salvo no Painel: ${req.file.filename}`);
       res.json({ success: true, filename: req.file.filename });
     }
   );
@@ -184,33 +171,26 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // 5. Listar Arquivos
 app.get('/api/files', (req, res) => {
   db.all("SELECT * FROM files ORDER BY createdAt DESC", [], (err, rows) => {
-    if (err) {
-      console.error("Erro ao listar arquivos:", err);
-      return res.status(500).json({ error: err.message });
-    }
+    if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
-// 6. Download Arquivo
+// 6. Download
 app.get('/api/download/:filename', (req, res) => {
-  const filename = req.params.filename;
-  // Segurança básica para evitar path traversal
-  const safeFilename = path.basename(filename);
-  const filepath = path.join(uploadDir, safeFilename);
-  
+  const filepath = path.join(UPLOAD_DIR, req.params.filename);
   if (fs.existsSync(filepath)) {
-      res.download(filepath);
+    res.download(filepath);
   } else {
-      res.status(404).send("Arquivo não encontrado no Painel.");
+    res.status(404).send("Arquivo não encontrado no disco do Painel.");
   }
 });
 
-// Redirecionar qualquer outra rota para o React (SPA)
+// SPA Fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor Painel rodando na porta ${PORT}`);
+  console.log(`[Painel] Servidor rodando na porta ${PORT}`);
 });
