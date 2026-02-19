@@ -1,35 +1,30 @@
-# Estágio de Build
-FROM node:18-alpine as build
+# Usa imagem oficial do Node.js
+FROM node:18-alpine
 
+# Define diretório de trabalho
 WORKDIR /app
 
-# Copia os arquivos de dependência primeiro para aproveitar o cache
+# Instala dependências de sistema necessárias para SQLite
+RUN apk add --no-cache python3 make g++
+
+# Cria a pasta de dados persistentes
+RUN mkdir -p /app/data/uploads
+
+# Copia e instala dependências do projeto
 COPY package*.json ./
 RUN npm install
 
-# Copia todo o resto do código
+# Copia todo o código fonte
 COPY . .
 
-# Cria a versão de produção
+# Constrói o Frontend (React)
 RUN npm run build
 
-# Estágio de Servidor (Nginx)
-FROM nginx:alpine
+# Define a pasta /app/data como um volume (importante para o Coolify saber que aqui ficam dados)
+VOLUME ["/app/data"]
 
-# Copia os arquivos construídos para a pasta do Nginx
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Configuração necessária para React Router (SPA) funcionar bem no Nginx
-# Cria um arquivo de config básico inline
-RUN echo 'server { \
-    listen 80; \
-    location / { \
-        root /usr/share/nginx/html; \
-        index index.html index.htm; \
-        try_files $uri $uri/ /index.html; \
-    } \
-}' > /etc/nginx/conf.d/default.conf
-
+# Expõe a porta 80
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Inicia o servidor do Painel
+CMD ["node", "server.js"]
