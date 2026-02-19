@@ -149,7 +149,19 @@ app.put('/api/bids/:id', (req, res) => {
   });
 });
 
-// 4. Upload de Arquivo
+// 4. Deletar Pregão
+app.delete('/api/bids/:id', (req, res) => {
+  const { id } = req.params;
+  db.run("DELETE FROM bids WHERE id = ?", id, function(err) {
+    if (err) {
+      console.error("[Painel] Erro ao deletar pregão:", err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ success: true });
+  });
+});
+
+// 5. Upload de Arquivo
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).send('Arquivo não recebido.');
   
@@ -168,7 +180,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   );
 });
 
-// 5. Listar Arquivos
+// 6. Listar Arquivos
 app.get('/api/files', (req, res) => {
   db.all("SELECT * FROM files ORDER BY createdAt DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -176,7 +188,33 @@ app.get('/api/files', (req, res) => {
   });
 });
 
-// 6. Download
+// 7. Deletar Arquivo
+app.delete('/api/files/:id', (req, res) => {
+  const { id } = req.params;
+  db.get("SELECT filename FROM files WHERE id = ?", id, (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: "Arquivo não encontrado" });
+
+    const filepath = path.join(UPLOAD_DIR, row.filename);
+    
+    // Deleta do banco primeiro
+    db.run("DELETE FROM files WHERE id = ?", id, (dbErr) => {
+      if (dbErr) return res.status(500).json({ error: dbErr.message });
+      
+      // Tenta deletar do disco (opcional, não falha se não conseguir)
+      try {
+        if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+      } catch (fsErr) {
+        console.error("[Painel] Erro ao deletar arquivo do disco:", fsErr);
+      }
+      
+      console.log(`[Painel] Arquivo deletado: ${row.filename}`);
+      res.json({ success: true });
+    });
+  });
+});
+
+// 8. Download
 app.get('/api/download/:filename', (req, res) => {
   const filepath = path.join(UPLOAD_DIR, req.params.filename);
   if (fs.existsSync(filepath)) {
