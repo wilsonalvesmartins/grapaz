@@ -1,32 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  Gavel, 
-  ThumbsDown, 
-  Trophy, 
-  DollarSign, 
-  FileText, 
-  LogOut, 
-  Menu, 
-  X, 
-  CheckCircle, 
-  AlertCircle, 
-  Calendar,
-  Upload,
-  Trash2,
-  Save
+  LayoutDashboard, PlusCircle, Gavel, ThumbsDown, Trophy, 
+  DollarSign, FileText, LogOut, Menu, X, Calendar, 
+  Upload, Save, Download, Trash2, Loader2, ExternalLink
 } from 'lucide-react';
 
-// Componentes UI
+// Componentes UI Reutilizáveis
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-lg shadow-md p-6 ${className}`}>
     {children}
   </div>
 );
 
-const Button = ({ children, onClick, variant = "primary", className = "", type = "button" }) => {
-  const baseStyle = "px-4 py-2 rounded-md font-medium transition-colors duration-200 flex items-center gap-2";
+const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
+  const baseStyle = "px-4 py-2 rounded-md font-medium transition-colors duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary: "bg-blue-700 text-white hover:bg-blue-800",
     secondary: "bg-gray-200 text-gray-800 hover:bg-gray-300",
@@ -35,7 +22,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type =
     outline: "border border-blue-700 text-blue-700 hover:bg-blue-50"
   };
   return (
-    <button type={type} onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`}>
+    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
       {children}
     </button>
   );
@@ -63,7 +50,8 @@ const Select = ({ label, options, ...props }) => (
   </div>
 );
 
-// Telas
+// --- TELAS DO SISTEMA ---
+
 const LoginScreen = ({ onLogin }) => {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
@@ -86,19 +74,8 @@ const LoginScreen = ({ onLogin }) => {
           <p className="text-gray-500 mt-2">Sistema de Licitações</p>
         </div>
         <form onSubmit={handleLogin}>
-          <Input 
-            label="Usuário" 
-            value={user} 
-            onChange={e => setUser(e.target.value)} 
-            placeholder="administrador"
-          />
-          <Input 
-            label="Senha" 
-            type="password" 
-            value={pass} 
-            onChange={e => setPass(e.target.value)} 
-            placeholder="••••••••"
-          />
+          <Input label="Usuário" value={user} onChange={e => setUser(e.target.value)} placeholder="administrador"/>
+          <Input label="Senha" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"/>
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
           <Button type="submit" className="w-full justify-center">Entrar</Button>
         </form>
@@ -168,40 +145,36 @@ const Dashboard = ({ bids }) => {
 };
 
 const InsertBid = ({ onAdd }) => {
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    orgao: '',
-    cidade: '',
-    plataforma: '', // Campo novo
-    numeroPregao: '',
-    processo: '',
-    data: '',
-    horario: '',
-    modalidade: 'Pregão Eletrônico'
+    orgao: '', cidade: '', plataforma: '', numeroPregao: '', processo: '', 
+    data: '', horario: '', modalidade: 'Pregão Eletrônico'
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onAdd({
-      ...formData,
-      id: Date.now(),
-      status: 'pending',
-      value: 0,
-      items: '',
-      deadlines: { docs: '', sign: '', delivery: '' },
-      paymentDeadline: '',
-      isPaid: false
-    });
-    setFormData({
-      orgao: '',
-      cidade: '',
-      plataforma: '', // Limpar campo novo
-      numeroPregao: '',
-      processo: '',
-      data: '',
-      horario: '',
-      modalidade: 'Pregão Eletrônico'
-    });
-    alert("Pregão inserido com sucesso!");
+    setLoading(true);
+    try {
+      await onAdd({
+        ...formData,
+        id: Date.now().toString(), // ID temporário, backend pode sobrescrever
+        status: 'pending',
+        value: 0,
+        items: '',
+        deadlines: { docs: '', sign: '', delivery: '' },
+        paymentDeadline: '',
+        isPaid: false
+      });
+      setFormData({
+        orgao: '', cidade: '', plataforma: '', numeroPregao: '', processo: '', 
+        data: '', horario: '', modalidade: 'Pregão Eletrônico'
+      });
+      alert("Pregão inserido com sucesso na VPS!");
+    } catch (error) {
+      alert("Erro ao salvar: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -210,7 +183,7 @@ const InsertBid = ({ onAdd }) => {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input label="Órgão" required value={formData.orgao} onChange={e => setFormData({...formData, orgao: e.target.value})} />
         <Input label="Cidade" required value={formData.cidade} onChange={e => setFormData({...formData, cidade: e.target.value})} />
-        <Input label="Plataforma" required value={formData.plataforma} onChange={e => setFormData({...formData, plataforma: e.target.value})} placeholder="Ex: Comprasnet, BLL..." />
+        <Input label="Plataforma" required value={formData.plataforma} onChange={e => setFormData({...formData, plataforma: e.target.value})} placeholder="Ex: Comprasnet" />
         <Input label="Número do Pregão" required value={formData.numeroPregao} onChange={e => setFormData({...formData, numeroPregao: e.target.value})} />
         <Input label="Número do Processo" required value={formData.processo} onChange={e => setFormData({...formData, processo: e.target.value})} />
         <Input label="Data" type="date" required value={formData.data} onChange={e => setFormData({...formData, data: e.target.value})} />
@@ -222,7 +195,9 @@ const InsertBid = ({ onAdd }) => {
           onChange={e => setFormData({...formData, modalidade: e.target.value})}
         />
         <div className="md:col-span-2 mt-4">
-          <Button type="submit" className="w-full justify-center">Salvar Pregão</Button>
+          <Button type="submit" disabled={loading} className="w-full justify-center">
+            {loading ? <Loader2 className="animate-spin" /> : 'Salvar Pregão'}
+          </Button>
         </div>
       </form>
     </Card>
@@ -266,8 +241,7 @@ const ProcessTracking = ({ bids, onUpdateStatus }) => {
         {filteredBids.map(bid => {
           const bidDate = new Date(bid.data + 'T' + bid.horario);
           const isPast = bidDate < now;
-          
-          if (!viewPast && isPast) return null; // Esconde passados na aba "Proximos"
+          if (!viewPast && isPast) return null;
           
           return (
             <Card key={bid.id} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -280,18 +254,18 @@ const ProcessTracking = ({ bids, onUpdateStatus }) => {
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                   <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(bid.data).toLocaleDateString()}</span>
                   <span className="flex items-center gap-1">🕒 {bid.horario}</span>
+                  {bid.plataforma && <span className="flex items-center gap-1">💻 {bid.plataforma}</span>}
                 </div>
               </div>
-              
               <div className="flex flex-wrap gap-2">
-                <Button variant="success" onClick={() => onUpdateStatus(bid.id, 'won')} className="text-sm">Vencido</Button>
-                <Button variant="outline" onClick={() => onUpdateStatus(bid.id, 'partial')} className="text-sm">Parcial</Button>
-                <Button variant="danger" onClick={() => onUpdateStatus(bid.id, 'lost')} className="text-sm">Perdido</Button>
+                <Button variant="success" onClick={() => onUpdateStatus(bid, 'won')} className="text-sm">Vencido</Button>
+                <Button variant="outline" onClick={() => onUpdateStatus(bid, 'partial')} className="text-sm">Parcial</Button>
+                <Button variant="danger" onClick={() => onUpdateStatus(bid, 'lost')} className="text-sm">Perdido</Button>
               </div>
             </Card>
           );
         })}
-        {filteredBids.length === 0 && <p className="text-center text-gray-500 py-8">Nenhum processo encontrado nesta categoria.</p>}
+        {filteredBids.length === 0 && <p className="text-center text-gray-500 py-8">Nenhum processo encontrado.</p>}
       </div>
     </div>
   );
@@ -299,8 +273,6 @@ const ProcessTracking = ({ bids, onUpdateStatus }) => {
 
 const LostBids = ({ bids }) => {
   const lostBids = bids.filter(b => b.status === 'lost');
-  
-  // Agrupar por cidade
   const groupedByCity = lostBids.reduce((acc, bid) => {
     (acc[bid.cidade] = acc[bid.cidade] || []).push(bid);
     return acc;
@@ -310,7 +282,6 @@ const LostBids = ({ bids }) => {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-blue-900">Processos Perdidos</h2>
       {Object.keys(groupedByCity).length === 0 && <p className="text-gray-500">Nenhum registro encontrado.</p>}
-      
       {Object.keys(groupedByCity).map(city => (
         <div key={city} className="space-y-3">
           <h3 className="font-bold text-lg text-gray-700 border-b border-gray-200 pb-2">{city}</h3>
@@ -336,14 +307,7 @@ const WonBidCard = ({ bid, onSave }) => {
   const [localBid, setLocalBid] = useState(bid);
   const [isDelivered, setIsDelivered] = useState(false);
 
-  // Sync with prop changes
-  useEffect(() => {
-    setLocalBid(bid);
-  }, [bid]);
-
-  const handleSave = () => {
-    onSave(localBid, isDelivered);
-  };
+  useEffect(() => { setLocalBid(bid); }, [bid]);
 
   return (
     <Card className="border border-blue-100">
@@ -356,14 +320,11 @@ const WonBidCard = ({ bid, onSave }) => {
           {localBid.status === 'won' ? 'Total' : 'Parcial'}
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg">
         <div>
           <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Itens Vencidos</label>
           <textarea 
-            className="w-full text-sm p-2 border rounded" 
-            rows="3"
-            placeholder="Descrição dos itens..."
+            className="w-full text-sm p-2 border rounded" rows="3"
             value={localBid.items || ''}
             onChange={(e) => setLocalBid({ ...localBid, items: e.target.value })}
           />
@@ -371,50 +332,32 @@ const WonBidCard = ({ bid, onSave }) => {
         <div>
           <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Valor Total (R$)</label>
           <input 
-            type="number"
-            className="w-full p-2 border rounded font-mono"
-            placeholder="0.00"
+            type="number" className="w-full p-2 border rounded font-mono"
             value={localBid.value || ''}
             onChange={(e) => setLocalBid({ ...localBid, value: e.target.value })}
           />
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-        <Input 
-          label="Prazo Documentos" 
-          type="date" 
-          value={localBid.deadlines?.docs || ''} 
+        <Input label="Prazo Documentos" type="date" value={localBid.deadlines?.docs || ''} 
           onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, docs: e.target.value}})}
         />
-        <Input 
-          label="Assinatura Ata" 
-          type="date" 
-          value={localBid.deadlines?.sign || ''} 
+        <Input label="Assinatura Ata" type="date" value={localBid.deadlines?.sign || ''} 
           onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, sign: e.target.value}})}
         />
-        <Input 
-          label="Prazo Entrega" 
-          type="date" 
-          value={localBid.deadlines?.delivery || ''} 
+        <Input label="Prazo Entrega" type="date" value={localBid.deadlines?.delivery || ''} 
           onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, delivery: e.target.value}})}
         />
       </div>
-
       <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-gray-100">
         <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded hover:bg-gray-100">
-          <input 
-            type="checkbox" 
-            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-            checked={isDelivered}
-            onChange={(e) => setIsDelivered(e.target.checked)}
+          <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+            checked={isDelivered} onChange={(e) => setIsDelivered(e.target.checked)}
           />
           <span className="text-sm font-medium text-gray-700">Marcar como Entregue</span>
         </label>
-        
-        <Button onClick={handleSave} className="flex items-center gap-2">
-          <Save size={18} />
-          Salvar
+        <Button onClick={() => onSave(localBid, isDelivered)} className="flex items-center gap-2">
+          <Save size={18} /> Salvar
         </Button>
       </div>
     </Card>
@@ -423,7 +366,6 @@ const WonBidCard = ({ bid, onSave }) => {
 
 const WonBids = ({ bids, onSaveBid }) => {
   const wonBids = bids.filter(b => ['won', 'partial'].includes(b.status));
-
   const groupedByCity = wonBids.reduce((acc, bid) => {
     (acc[bid.cidade] = acc[bid.cidade] || []).push(bid);
     return acc;
@@ -432,9 +374,7 @@ const WonBids = ({ bids, onSaveBid }) => {
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-bold text-blue-900">Processos Vencidos (Em Andamento)</h2>
-      
       {Object.keys(groupedByCity).length === 0 && <p className="text-gray-500">Nenhum processo vencido aguardando entrega.</p>}
-
       {Object.keys(groupedByCity).map(city => (
         <div key={city} className="space-y-4">
           <h3 className="font-bold text-xl text-blue-800 bg-blue-50 p-2 rounded">{city}</h3>
@@ -464,9 +404,7 @@ const Payments = ({ bids, onUpdateBid }) => {
           </p>
         </div>
       </div>
-
       {deliveredBids.length === 0 && <p className="text-gray-500">Nenhum item entregue aguardando pagamento.</p>}
-
       {deliveredBids.map(bid => (
         <Card key={bid.id} className={`transition-all ${bid.status === 'paid' ? 'opacity-60 bg-gray-50' : 'border-l-4 border-yellow-400'}`}>
           <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -480,26 +418,20 @@ const Payments = ({ bids, onUpdateBid }) => {
                 Valor: {parseFloat(bid.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
             </div>
-            
             <div className="flex items-end gap-4">
               <div className="w-48">
                 <label className="text-xs text-gray-500 block mb-1">Previsão Pagamento</label>
-                <input 
-                  type="date" 
-                  className="w-full text-sm border rounded p-1"
+                <input type="date" className="w-full text-sm border rounded p-1"
                   value={bid.paymentDeadline || ''}
-                  onChange={(e) => onUpdateBid(bid.id, { paymentDeadline: e.target.value })}
+                  onChange={(e) => onUpdateBid(bid, { paymentDeadline: e.target.value })}
                   disabled={bid.status === 'paid'}
                 />
               </div>
-              
               <div className="flex items-center h-10">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input 
-                    type="checkbox" 
-                    className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
+                  <input type="checkbox" className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
                     checked={bid.status === 'paid'}
-                    onChange={(e) => onUpdateBid(bid.id, { status: e.target.checked ? 'paid' : 'delivered' })}
+                    onChange={(e) => onUpdateBid(bid, { status: e.target.checked ? 'paid' : 'delivered' })}
                   />
                   <span className="font-bold text-gray-700">Recebido</span>
                 </label>
@@ -515,59 +447,75 @@ const Payments = ({ bids, onUpdateBid }) => {
 const Invoices = () => {
   const [tab, setTab] = useState('entry');
   const [files, setFiles] = useState({ entry: [], exit: [] });
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const newFile = { 
-        id: Date.now(), 
-        name: file.name, 
-        date: new Date().toLocaleDateString(),
-        size: (file.size / 1024).toFixed(2) + ' KB'
-      };
-      setFiles({ ...files, [tab]: [newFile, ...files[tab]] });
+  const fetchFiles = async () => {
+    try {
+      const res = await fetch('/api/files');
+      const data = await res.json();
+      const entry = data.filter(f => f.type === 'entry');
+      const exit = data.filter(f => f.type === 'exit');
+      setFiles({ entry, exit });
+    } catch (error) {
+      console.error("Erro ao carregar arquivos:", error);
     }
+  };
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', tab);
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        alert("Nota Fiscal salva na VPS com sucesso!");
+        fetchFiles();
+      } else {
+        alert("Erro ao enviar arquivo.");
+      }
+    } catch (error) {
+      alert("Erro de conexão com servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = (filename) => {
+    // Abre o link de download direto da API do backend
+    window.open(`/api/download/${filename}`, '_blank');
   };
 
   const currentFiles = files[tab];
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-blue-900">Gestão de Notas Fiscais</h2>
-      
-      {/* Hidden File Input */}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        className="hidden" 
-        accept="application/pdf,image/*"
-      />
-
+      <h2 className="text-2xl font-bold text-blue-900">Gestão de Notas Fiscais (VPS)</h2>
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,image/*" />
       <div className="flex border-b border-gray-200">
-        <button 
-          className={`px-6 py-3 font-medium ${tab === 'entry' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
-          onClick={() => setTab('entry')}
-        >
-          Entrada (Compras)
-        </button>
-        <button 
-          className={`px-6 py-3 font-medium ${tab === 'exit' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
-          onClick={() => setTab('exit')}
-        >
-          Saída (Serviços/Vendas)
-        </button>
+        <button className={`px-6 py-3 font-medium ${tab === 'entry' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setTab('entry')}>Entrada (Compras)</button>
+        <button className={`px-6 py-3 font-medium ${tab === 'exit' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setTab('exit')}>Saída (Vendas)</button>
       </div>
-
       <Card className="min-h-[300px]">
         <div className="flex justify-between items-center mb-6">
-          <p className="text-gray-600">Arquivos armazenados na VPS Grapaz</p>
-          <Button onClick={() => fileInputRef.current.click()}>
-            <Upload size={18} /> Anexar Documento
+          <p className="text-gray-600">Arquivos armazenados no disco da VPS</p>
+          <Button onClick={() => fileInputRef.current.click()} disabled={loading}>
+            {loading ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+            Anexar Documento
           </Button>
         </div>
-
         <div className="space-y-2">
           {currentFiles.length === 0 && (
             <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-lg">
@@ -579,11 +527,13 @@ const Invoices = () => {
               <div className="flex items-center gap-3">
                 <FileText className="text-red-500" size={20} />
                 <div>
-                  <span className="font-medium text-gray-700 block">{file.name}</span>
-                  <span className="text-xs text-gray-400">{file.date} - {file.size}</span>
+                  <span className="font-medium text-gray-700 block">{file.originalName}</span>
+                  <span className="text-xs text-gray-400">{new Date(file.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
-              <button className="text-blue-600 hover:text-blue-800 text-sm">Baixar</button>
+              <button onClick={() => handleDownload(file.filename)} className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1">
+                <Download size={16}/> Baixar
+              </button>
             </div>
           ))}
         </div>
@@ -597,34 +547,60 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // Estado inicial carregado do localStorage ou mock
-  const [bids, setBids] = useState(() => {
-    const saved = localStorage.getItem('grapaz_bids');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [bids, setBids] = useState([]);
 
+  // Fetch inicial do banco de dados (API)
   useEffect(() => {
-    localStorage.setItem('grapaz_bids', JSON.stringify(bids));
-  }, [bids]);
+    if (isAuthenticated) {
+      fetch('/api/bids')
+        .then(res => res.json())
+        .then(data => setBids(data))
+        .catch(err => console.error("Erro ao buscar dados:", err));
+    }
+  }, [isAuthenticated, currentPage]); // Recarrega quando muda a página para garantir dados frescos
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentPage('dashboard');
   };
 
-  const addBid = (newBid) => setBids([...bids, newBid]);
-
-  const updateStatus = (id, newStatus) => {
-    setBids(bids.map(b => b.id === id ? { ...b, status: newStatus } : b));
+  const addBid = async (newBid) => {
+    const res = await fetch('/api/bids', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newBid)
+    });
+    if (res.ok) {
+      const savedBid = await res.json();
+      setBids([...bids, savedBid]);
+    }
   };
 
-  const updateBid = (id, updates) => {
-    setBids(bids.map(b => b.id === id ? { ...b, ...updates } : b));
+  const updateBidStatus = async (bid, newStatus) => {
+    const updated = { ...bid, status: newStatus };
+    const res = await fetch(`/api/bids/${bid.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    });
+    if (res.ok) {
+      setBids(bids.map(b => b.id === bid.id ? updated : b));
+    }
   };
 
-  // Nova função para salvar da aba Vencidos
-  const handleSaveBid = (updatedBid, shouldDeliver) => {
+  const updateBidData = async (bid, updates) => {
+    const updated = { ...bid, ...updates };
+    const res = await fetch(`/api/bids/${bid.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    });
+    if (res.ok) {
+      setBids(bids.map(b => b.id === bid.id ? updated : b));
+    }
+  };
+
+  const handleSaveBid = async (updatedBid, shouldDeliver) => {
     if (shouldDeliver) {
       updatedBid.status = 'delivered';
       alert("Salvo! O processo foi movido para Pagamentos.");
@@ -632,7 +608,7 @@ export default function App() {
     } else {
       alert("Alterações salvas com sucesso!");
     }
-    setBids(bids.map(b => b.id === updatedBid.id ? updatedBid : b));
+    await updateBidData(updatedBid, {});
   };
 
   if (!isAuthenticated) {
@@ -643,9 +619,7 @@ export default function App() {
     <button
       onClick={() => { setCurrentPage(id); setIsMobileMenuOpen(false); }}
       className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
-        currentPage === id 
-          ? 'bg-blue-800 text-white border-r-4 border-blue-400' 
-          : 'text-blue-100 hover:bg-blue-800'
+        currentPage === id ? 'bg-blue-800 text-white border-r-4 border-blue-400' : 'text-blue-100 hover:bg-blue-800'
       }`}
     >
       <Icon size={20} />
@@ -655,11 +629,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex font-sans">
-      {/* Sidebar Desktop */}
       <aside className="hidden md:flex w-64 bg-blue-900 flex-col shadow-xl z-20">
         <div className="p-6 border-b border-blue-800">
           <h1 className="text-2xl font-bold text-white tracking-wider">GRAPAZ</h1>
-          <p className="text-blue-300 text-xs">Gestão de Licitações</p>
+          <p className="text-blue-300 text-xs">Gestão de Licitações (VPS)</p>
         </div>
         <nav className="flex-1 py-4 space-y-1">
           <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
@@ -671,28 +644,19 @@ export default function App() {
           <NavItem id="invoices" icon={FileText} label="Notas Fiscais" />
         </nav>
         <div className="p-4 border-t border-blue-800">
-          <button onClick={handleLogout} className="flex items-center gap-2 text-blue-200 hover:text-white transition w-full">
-            <LogOut size={18} /> Sair
-          </button>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-blue-200 hover:text-white transition w-full"><LogOut size={18} /> Sair</button>
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header Mobile */}
         <header className="bg-white shadow-sm p-4 flex justify-between items-center md:hidden z-10">
           <span className="font-bold text-blue-900">Gestão Grapaz</span>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-            {isMobileMenuOpen ? <X /> : <Menu />}
-          </button>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>{isMobileMenuOpen ? <X /> : <Menu />}</button>
         </header>
 
-        {/* Mobile Menu Overlay */}
         {isMobileMenuOpen && (
           <div className="absolute inset-0 bg-blue-900 z-50 flex flex-col md:hidden">
-            <div className="flex justify-end p-4">
-              <button onClick={() => setIsMobileMenuOpen(false)} className="text-white"><X size={28}/></button>
-            </div>
+            <div className="flex justify-end p-4"><button onClick={() => setIsMobileMenuOpen(false)} className="text-white"><X size={28}/></button></div>
             <nav className="flex-1">
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
               <NavItem id="insert" icon={PlusCircle} label="Inserir Pregão" />
@@ -701,9 +665,6 @@ export default function App() {
               <NavItem id="lost" icon={ThumbsDown} label="Perdidos" />
               <NavItem id="payments" icon={DollarSign} label="Pagamentos" />
               <NavItem id="invoices" icon={FileText} label="Notas Fiscais" />
-              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-300 mt-4">
-                <LogOut size={20} /> Sair
-              </button>
             </nav>
           </div>
         )}
@@ -711,10 +672,10 @@ export default function App() {
         <main className="flex-1 overflow-auto p-4 md:p-8">
           {currentPage === 'dashboard' && <Dashboard bids={bids} />}
           {currentPage === 'insert' && <InsertBid onAdd={addBid} />}
-          {currentPage === 'tracking' && <ProcessTracking bids={bids} onUpdateStatus={updateStatus} />}
+          {currentPage === 'tracking' && <ProcessTracking bids={bids} onUpdateStatus={updateBidStatus} />}
           {currentPage === 'won' && <WonBids bids={bids} onSaveBid={handleSaveBid} />}
           {currentPage === 'lost' && <LostBids bids={bids} />}
-          {currentPage === 'payments' && <Payments bids={bids} onUpdateBid={updateBid} />}
+          {currentPage === 'payments' && <Payments bids={bids} onUpdateBid={updateBidData} />}
           {currentPage === 'invoices' && <Invoices />}
         </main>
       </div>
