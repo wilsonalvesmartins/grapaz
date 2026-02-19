@@ -160,8 +160,42 @@ const InsertBid = ({ onAdd }) => {
   );
 };
 
-const ProcessTracking = ({ bids, onUpdateStatus }) => {
+// Componente auxiliar para edição genérica (usado em Acompanhamento e Pagamentos)
+const EditBidForm = ({ bid, onSave, onCancel, onDelete, showFinancials = false }) => {
+  const [localBid, setLocalBid] = useState(bid);
+
+  return (
+    <Card className="border-2 border-blue-200 bg-blue-50">
+      <div className="flex justify-between mb-4">
+        <h4 className="font-bold text-lg text-gray-700">Editar Processo</h4>
+        <button onClick={onCancel} className="text-gray-500 hover:text-gray-800"><X size={20}/></button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Input label="Órgão" value={localBid.orgao} onChange={e => setLocalBid({...localBid, orgao: e.target.value})} />
+        <Input label="Cidade" value={localBid.cidade} onChange={e => setLocalBid({...localBid, cidade: e.target.value})} />
+        <Input label="Pregão" value={localBid.numeroPregao} onChange={e => setLocalBid({...localBid, numeroPregao: e.target.value})} />
+        <Input label="Processo" value={localBid.processo} onChange={e => setLocalBid({...localBid, processo: e.target.value})} />
+        <Input label="Plataforma" value={localBid.plataforma} onChange={e => setLocalBid({...localBid, plataforma: e.target.value})} />
+        <div className="grid grid-cols-2 gap-2">
+          <Input label="Data" type="date" value={localBid.data} onChange={e => setLocalBid({...localBid, data: e.target.value})} />
+          <Input label="Horário" type="time" value={localBid.horario} onChange={e => setLocalBid({...localBid, horario: e.target.value})} />
+        </div>
+        {showFinancials && (
+           <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Valor (R$)</label><input type="number" className="w-full p-2 border rounded" value={localBid.value || ''} onChange={(e) => setLocalBid({ ...localBid, value: e.target.value })} /></div>
+        )}
+      </div>
+      <div className="flex justify-end gap-2 mt-4">
+         <Button variant="danger" onClick={() => onDelete(bid.id)}>Excluir</Button>
+         <Button onClick={() => onSave(localBid)}>Salvar</Button>
+      </div>
+    </Card>
+  );
+};
+
+const ProcessTracking = ({ bids, onUpdateStatus, onDelete, onUpdateData }) => {
   const [viewPast, setViewPast] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
   const filteredBids = bids.filter(b => b.status === 'pending').sort((a, b) => {
     const dateA = new Date(a.data + 'T' + a.horario);
     const dateB = new Date(b.data + 'T' + b.horario);
@@ -182,24 +216,45 @@ const ProcessTracking = ({ bids, onUpdateStatus }) => {
         {filteredBids.map(bid => {
           const bidDate = new Date(bid.data + 'T' + bid.horario);
           if (!viewPast && bidDate < now) return null;
+
+          if (editingId === bid.id) {
+            return (
+              <EditBidForm 
+                key={bid.id} 
+                bid={bid} 
+                onCancel={() => setEditingId(null)}
+                onDelete={onDelete}
+                onSave={(updated) => { onUpdateData(updated, {}); setEditingId(null); }}
+              />
+            );
+          }
+
           return (
-            <Card key={bid.id} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-lg text-gray-800">{bid.orgao}</span>
-                  <span className="text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-600">{bid.numeroPregao}</span>
+            <Card key={bid.id} className="relative">
+               {/* Botões de Ação no Topo do Card */}
+               <div className="absolute top-4 right-4 flex gap-1">
+                 <button onClick={() => setEditingId(bid.id)} className="p-1 text-gray-400 hover:text-blue-600" title="Editar"><Edit size={16}/></button>
+                 <button onClick={() => onDelete(bid.id)} className="p-1 text-gray-400 hover:text-red-600" title="Excluir"><Trash2 size={16}/></button>
+               </div>
+
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mt-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-lg text-gray-800">{bid.orgao}</span>
+                    <span className="text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-600">{bid.numeroPregao}</span>
+                  </div>
+                  <p className="text-gray-600">{bid.cidade} - {bid.modalidade}</p>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                    <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(bid.data).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1">🕒 {bid.horario}</span>
+                    {bid.plataforma && <span className="flex items-center gap-1">💻 {bid.plataforma}</span>}
+                  </div>
                 </div>
-                <p className="text-gray-600">{bid.cidade} - {bid.modalidade}</p>
-                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                  <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(bid.data).toLocaleDateString()}</span>
-                  <span className="flex items-center gap-1">🕒 {bid.horario}</span>
-                  {bid.plataforma && <span className="flex items-center gap-1">💻 {bid.plataforma}</span>}
+                <div className="flex flex-wrap gap-2 pt-4 md:pt-0">
+                  <Button variant="success" onClick={() => onUpdateStatus(bid, 'won')} className="text-sm">Vencido</Button>
+                  <Button variant="outline" onClick={() => onUpdateStatus(bid, 'partial')} className="text-sm">Parcial</Button>
+                  <Button variant="danger" onClick={() => onUpdateStatus(bid, 'lost')} className="text-sm">Perdido</Button>
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="success" onClick={() => onUpdateStatus(bid, 'won')} className="text-sm">Vencido</Button>
-                <Button variant="outline" onClick={() => onUpdateStatus(bid, 'partial')} className="text-sm">Parcial</Button>
-                <Button variant="danger" onClick={() => onUpdateStatus(bid, 'lost')} className="text-sm">Perdido</Button>
               </div>
             </Card>
           );
@@ -363,25 +418,44 @@ const WonBids = ({ bids, onSaveBid, onDeleteBid, onStatusChange }) => {
   );
 };
 
-const Payments = ({ bids, onUpdateBid }) => {
+const Payments = ({ bids, onUpdateBid, onDelete, onUpdateData }) => {
   const delivered = bids.filter(b => ['delivered', 'paid'].includes(b.status));
   const total = delivered.filter(b => b.status === 'delivered').reduce((acc, curr) => acc + parseFloat(curr.value || 0), 0);
+  const [editingId, setEditingId] = useState(null);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end border-b pb-4"><h2 className="text-2xl font-bold text-blue-900">Pagamentos e Recebíveis</h2><div className="text-right"><p className="text-sm text-gray-500">Total a Receber</p><p className="text-2xl font-bold text-blue-600">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div></div>
       {delivered.length === 0 && <p className="text-gray-500">Nenhum item aguardando pagamento.</p>}
-      {delivered.map(bid => (
-        <Card key={bid.id} className={`transition-all ${bid.status === 'paid' ? 'opacity-60 bg-gray-50' : 'border-l-4 border-yellow-400'}`}>
-          <div className="flex flex-col md:flex-row justify-between gap-4">
-            <div className="flex-1"><div className="flex items-center gap-2"><h4 className="font-bold text-lg text-gray-800">{bid.orgao}</h4>{bid.status === 'paid' && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold">PAGO</span>}</div><p className="text-gray-600 text-sm">Cidade: {bid.cidade} | Pregão: {bid.numeroPregao}</p><p className="mt-2 font-mono font-medium text-blue-900">Valor: {parseFloat(bid.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
-            <div className="flex items-end gap-4">
-              <div className="w-48"><label className="text-xs text-gray-500 block mb-1">Previsão Pagamento</label><input type="date" className="w-full text-sm border rounded p-1" value={bid.paymentDeadline || ''} onChange={(e) => onUpdateBid(bid, { paymentDeadline: e.target.value })} disabled={bid.status === 'paid'} /></div>
-              <div className="flex items-center h-10"><label className="flex items-center gap-2 cursor-pointer select-none"><input type="checkbox" className="w-5 h-5 text-green-600 rounded focus:ring-green-500" checked={bid.status === 'paid'} onChange={(e) => onUpdateBid(bid, { status: e.target.checked ? 'paid' : 'delivered' })} /><span className="font-bold text-gray-700">Recebido</span></label></div>
+      {delivered.map(bid => {
+        if (editingId === bid.id) {
+            return (
+              <EditBidForm 
+                key={bid.id} 
+                bid={bid} 
+                showFinancials={true}
+                onCancel={() => setEditingId(null)}
+                onDelete={onDelete}
+                onSave={(updated) => { onUpdateData(updated, {}); setEditingId(null); }}
+              />
+            );
+        }
+        return (
+          <Card key={bid.id} className={`transition-all relative ${bid.status === 'paid' ? 'opacity-60 bg-gray-50' : 'border-l-4 border-yellow-400'}`}>
+            <div className="absolute top-4 right-4 flex gap-1">
+                 <button onClick={() => setEditingId(bid.id)} className="p-1 text-gray-400 hover:text-blue-600" title="Editar"><Edit size={16}/></button>
+                 <button onClick={() => onDelete(bid.id)} className="p-1 text-gray-400 hover:text-red-600" title="Excluir"><Trash2 size={16}/></button>
             </div>
-          </div>
-        </Card>
-      ))}
+            <div className="flex flex-col md:flex-row justify-between gap-4">
+              <div className="flex-1"><div className="flex items-center gap-2"><h4 className="font-bold text-lg text-gray-800">{bid.orgao}</h4>{bid.status === 'paid' && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold">PAGO</span>}</div><p className="text-gray-600 text-sm">Cidade: {bid.cidade} | Pregão: {bid.numeroPregao}</p><p className="mt-2 font-mono font-medium text-blue-900">Valor: {parseFloat(bid.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+              <div className="flex items-end gap-4">
+                <div className="w-48"><label className="text-xs text-gray-500 block mb-1">Previsão Pagamento</label><input type="date" className="w-full text-sm border rounded p-1" value={bid.paymentDeadline || ''} onChange={(e) => onUpdateBid(bid, { paymentDeadline: e.target.value })} disabled={bid.status === 'paid'} /></div>
+                <div className="flex items-center h-10"><label className="flex items-center gap-2 cursor-pointer select-none"><input type="checkbox" className="w-5 h-5 text-green-600 rounded focus:ring-green-500" checked={bid.status === 'paid'} onChange={(e) => onUpdateBid(bid, { status: e.target.checked ? 'paid' : 'delivered' })} /><span className="font-bold text-gray-700">Recebido</span></label></div>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 };
@@ -554,10 +628,10 @@ export default function App() {
         <main className="flex-1 overflow-auto p-4 md:p-8">
           {currentPage === 'dashboard' && <Dashboard bids={bids} />}
           {currentPage === 'insert' && <InsertBid onAdd={addBid} />}
-          {currentPage === 'tracking' && <ProcessTracking bids={bids} onUpdateStatus={updateBidStatus} />}
+          {currentPage === 'tracking' && <ProcessTracking bids={bids} onUpdateStatus={updateBidStatus} onDelete={handleDeleteBid} onUpdateData={updateBidData} />}
           {currentPage === 'won' && <WonBids bids={bids} onSaveBid={handleSaveBid} onDeleteBid={handleDeleteBid} onStatusChange={updateBidStatus} />}
           {currentPage === 'lost' && <LostBids bids={bids} onSaveBid={handleSaveBid} onDeleteBid={handleDeleteBid} onStatusChange={updateBidStatus} />}
-          {currentPage === 'payments' && <Payments bids={bids} onUpdateBid={updateBidData} />}
+          {currentPage === 'payments' && <Payments bids={bids} onUpdateBid={updateBidData} onDelete={handleDeleteBid} onUpdateData={updateBidData} />}
           {currentPage === 'invoices' && <Invoices />}
         </main>
       </div>
