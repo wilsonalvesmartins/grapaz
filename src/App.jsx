@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, PlusCircle, Gavel, ThumbsDown, Trophy, 
   DollarSign, FileText, LogOut, Menu, X, Calendar, 
-  Upload, Save, Download, Trash2, Loader2
+  Upload, Save, Download, Trash2, Loader2, Edit, CheckCircle, ArrowRight
 } from 'lucide-react';
 
 const Card = ({ children, className = "" }) => (
@@ -11,17 +11,18 @@ const Card = ({ children, className = "" }) => (
   </div>
 );
 
-const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
+const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled, title }) => {
   const baseStyle = "px-4 py-2 rounded-md font-medium transition-colors duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary: "bg-blue-700 text-white hover:bg-blue-800",
     secondary: "bg-gray-200 text-gray-800 hover:bg-gray-300",
     danger: "bg-red-100 text-red-700 hover:bg-red-200",
     success: "bg-green-100 text-green-700 hover:bg-green-200",
-    outline: "border border-blue-700 text-blue-700 hover:bg-blue-50"
+    outline: "border border-blue-700 text-blue-700 hover:bg-blue-50",
+    ghost: "bg-transparent text-gray-600 hover:bg-gray-100 hover:text-red-600 px-2"
   };
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`} title={title}>
       {children}
     </button>
   );
@@ -209,7 +210,106 @@ const ProcessTracking = ({ bids, onUpdateStatus }) => {
   );
 };
 
-const LostBids = ({ bids }) => {
+const EditableBidCard = ({ bid, onSave, onDelete, onStatusChange, isLostTab }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [localBid, setLocalBid] = useState(bid);
+  const [isDelivered, setIsDelivered] = useState(false);
+
+  useEffect(() => { setLocalBid(bid); }, [bid]);
+
+  const handleSave = () => {
+    onSave(localBid, isDelivered);
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <Card className={`border-2 ${isLostTab ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
+        <div className="flex justify-between mb-4">
+          <h4 className="font-bold text-lg text-gray-700">Editar Processo</h4>
+          <button onClick={() => setIsEditing(false)} className="text-gray-500 hover:text-gray-800"><X size={20}/></button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input label="Órgão" value={localBid.orgao} onChange={e => setLocalBid({...localBid, orgao: e.target.value})} />
+          <Input label="Cidade" value={localBid.cidade} onChange={e => setLocalBid({...localBid, cidade: e.target.value})} />
+          <Input label="Pregão" value={localBid.numeroPregao} onChange={e => setLocalBid({...localBid, numeroPregao: e.target.value})} />
+          <Input label="Processo" value={localBid.processo} onChange={e => setLocalBid({...localBid, processo: e.target.value})} />
+          <Input label="Plataforma" value={localBid.plataforma} onChange={e => setLocalBid({...localBid, plataforma: e.target.value})} />
+          <div className="grid grid-cols-2 gap-2">
+            <Input label="Data" type="date" value={localBid.data} onChange={e => setLocalBid({...localBid, data: e.target.value})} />
+            <Input label="Horário" type="time" value={localBid.horario} onChange={e => setLocalBid({...localBid, horario: e.target.value})} />
+          </div>
+          {!isLostTab && (
+             <>
+               <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Itens</label><textarea className="w-full text-sm p-2 border rounded" rows="3" value={localBid.items || ''} onChange={(e) => setLocalBid({ ...localBid, items: e.target.value })} /></div>
+               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Valor (R$)</label><input type="number" className="w-full p-2 border rounded" value={localBid.value || ''} onChange={(e) => setLocalBid({ ...localBid, value: e.target.value })} /></div>
+             </>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+           <Button variant="danger" onClick={() => onDelete(bid.id)}>Excluir Processo</Button>
+           <Button onClick={handleSave}>Salvar Alterações</Button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={`border ${isLostTab ? 'border-red-100' : 'border-blue-100'}`}>
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h4 className={`font-bold text-lg ${isLostTab ? 'text-red-900' : 'text-blue-900'}`}>{localBid.orgao}</h4>
+          <p className="text-sm text-gray-600">Pregão: {localBid.numeroPregao} | Processo: {localBid.processo}</p>
+          <div className="text-xs text-gray-500 mt-1 flex gap-3">
+             <span>{new Date(localBid.data).toLocaleDateString()}</span>
+             <span>{localBid.plataforma}</span>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+           <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isLostTab ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+             {isLostTab ? 'Perdido' : localBid.status === 'won' ? 'Total' : 'Parcial'}
+           </div>
+           <div className="flex gap-1">
+             <button onClick={() => setIsEditing(true)} className="p-1 text-gray-400 hover:text-blue-600" title="Editar"><Edit size={16}/></button>
+             <button onClick={() => onDelete(bid.id)} className="p-1 text-gray-400 hover:text-red-600" title="Excluir"><Trash2 size={16}/></button>
+           </div>
+        </div>
+      </div>
+
+      {!isLostTab && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg">
+            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Itens Vencidos</label><p className="text-sm text-gray-700 whitespace-pre-wrap">{localBid.items || '-'}</p></div>
+            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Valor Total</label><p className="font-mono text-blue-900 font-bold">{parseFloat(localBid.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <Input label="Prazo Docs" type="date" value={localBid.deadlines?.docs || ''} onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, docs: e.target.value}})} />
+            <Input label="Ass. Ata" type="date" value={localBid.deadlines?.sign || ''} onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, sign: e.target.value}})} />
+            <Input label="Entrega" type="date" value={localBid.deadlines?.delivery || ''} onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, delivery: e.target.value}})} />
+          </div>
+        </>
+      )}
+
+      <div className="flex flex-wrap justify-end items-center gap-4 mt-4 pt-4 border-t border-gray-100">
+        {/* Status Actions */}
+        {isLostTab ? (
+           <Button variant="success" className="text-xs" onClick={() => onStatusChange(bid, 'won')}>Mudar para Vencido</Button>
+        ) : (
+           <>
+             <Button variant="danger" className="text-xs" onClick={() => onStatusChange(bid, 'lost')}>Mudar para Perdido</Button>
+             <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded hover:bg-gray-100 ml-auto">
+               <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={isDelivered} onChange={(e) => setIsDelivered(e.target.checked)} />
+               <span className="text-sm font-medium text-gray-700">Marcar como Entregue</span>
+             </label>
+             <Button onClick={handleSave} className="flex items-center gap-2"><Save size={18} /> Salvar Prazos</Button>
+           </>
+        )}
+      </div>
+    </Card>
+  );
+};
+
+const LostBids = ({ bids, onSaveBid, onDeleteBid, onStatusChange }) => {
   const lostBids = bids.filter(b => b.status === 'lost');
   const grouped = lostBids.reduce((acc, bid) => { (acc[bid.cidade] = acc[bid.cidade] || []).push(bid); return acc; }, {});
 
@@ -221,16 +321,14 @@ const LostBids = ({ bids }) => {
         <div key={city} className="space-y-3">
           <h3 className="font-bold text-lg text-gray-700 border-b border-gray-200 pb-2">{city}</h3>
           {grouped[city].map(bid => (
-            <Card key={bid.id} className="bg-red-50 border border-red-100">
-              <div className="flex justify-between">
-                <div>
-                  <p className="font-bold text-red-900">{bid.orgao}</p>
-                  <p className="text-sm text-red-700">Pregão: {bid.numeroPregao}</p>
-                  <p className="text-xs text-red-600 mt-1">{new Date(bid.data).toLocaleDateString()}</p>
-                </div>
-                <ThumbsDown className="text-red-300" />
-              </div>
-            </Card>
+            <EditableBidCard 
+              key={bid.id} 
+              bid={bid} 
+              onSave={onSaveBid} 
+              onDelete={onDeleteBid} 
+              onStatusChange={onStatusChange}
+              isLostTab={true}
+            />
           ))}
         </div>
       ))}
@@ -238,35 +336,7 @@ const LostBids = ({ bids }) => {
   );
 };
 
-const WonBidCard = ({ bid, onSave }) => {
-  const [localBid, setLocalBid] = useState(bid);
-  const [isDelivered, setIsDelivered] = useState(false);
-  useEffect(() => { setLocalBid(bid); }, [bid]);
-
-  return (
-    <Card className="border border-blue-100">
-      <div className="flex justify-between items-start mb-4">
-        <div><h4 className="font-bold text-lg">{localBid.orgao}</h4><p className="text-sm text-gray-600">Pregão: {localBid.numeroPregao} | Processo: {localBid.processo}</p></div>
-        <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold uppercase">{localBid.status === 'won' ? 'Total' : 'Parcial'}</div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg">
-        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Itens Vencidos</label><textarea className="w-full text-sm p-2 border rounded" rows="3" value={localBid.items || ''} onChange={(e) => setLocalBid({ ...localBid, items: e.target.value })} /></div>
-        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Valor Total (R$)</label><input type="number" className="w-full p-2 border rounded font-mono" value={localBid.value || ''} onChange={(e) => setLocalBid({ ...localBid, value: e.target.value })} /></div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-        <Input label="Prazo Documentos" type="date" value={localBid.deadlines?.docs || ''} onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, docs: e.target.value}})} />
-        <Input label="Assinatura Ata" type="date" value={localBid.deadlines?.sign || ''} onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, sign: e.target.value}})} />
-        <Input label="Prazo Entrega" type="date" value={localBid.deadlines?.delivery || ''} onChange={(e) => setLocalBid({ ...localBid, deadlines: {...localBid.deadlines, delivery: e.target.value}})} />
-      </div>
-      <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-gray-100">
-        <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded hover:bg-gray-100"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={isDelivered} onChange={(e) => setIsDelivered(e.target.checked)} /><span className="text-sm font-medium text-gray-700">Marcar como Entregue</span></label>
-        <Button onClick={() => onSave(localBid, isDelivered)} className="flex items-center gap-2"><Save size={18} /> Salvar</Button>
-      </div>
-    </Card>
-  );
-};
-
-const WonBids = ({ bids, onSaveBid }) => {
+const WonBids = ({ bids, onSaveBid, onDeleteBid, onStatusChange }) => {
   const wonBids = bids.filter(b => ['won', 'partial'].includes(b.status));
   const grouped = wonBids.reduce((acc, bid) => { (acc[bid.cidade] = acc[bid.cidade] || []).push(bid); return acc; }, {});
 
@@ -277,7 +347,16 @@ const WonBids = ({ bids, onSaveBid }) => {
       {Object.keys(grouped).map(city => (
         <div key={city} className="space-y-4">
           <h3 className="font-bold text-xl text-blue-800 bg-blue-50 p-2 rounded">{city}</h3>
-          {grouped[city].map(bid => <WonBidCard key={bid.id} bid={bid} onSave={onSaveBid} />)}
+          {grouped[city].map(bid => (
+             <EditableBidCard 
+               key={bid.id} 
+               bid={bid} 
+               onSave={onSaveBid} 
+               onDelete={onDeleteBid}
+               onStatusChange={onStatusChange}
+               isLostTab={false}
+             />
+          ))}
         </div>
       ))}
     </div>
@@ -340,6 +419,15 @@ const Invoices = () => {
     } catch (error) { alert("Erro de conexão com servidor."); } finally { setLoading(false); }
   };
 
+  const handleDeleteFile = async (id) => {
+    if(!confirm("Tem certeza que deseja apagar este arquivo?")) return;
+    try {
+      const res = await fetch(`/api/files/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchFiles();
+      else alert("Erro ao apagar arquivo.");
+    } catch(e) { alert("Erro de conexão."); }
+  };
+
   const currentFiles = files[tab];
 
   return (
@@ -365,7 +453,10 @@ const Invoices = () => {
                 <FileText className="text-red-500" size={20} />
                 <div><span className="font-medium text-gray-700 block">{file.originalName}</span><span className="text-xs text-gray-400">{new Date(file.createdAt).toLocaleDateString()}</span></div>
               </div>
-              <button onClick={() => window.open(`/api/download/${file.filename}`, '_blank')} className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"><Download size={16}/> Baixar</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.open(`/api/download/${file.filename}`, '_blank')} className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"><Download size={16}/> Baixar</button>
+                <button onClick={() => handleDeleteFile(file.id)} className="text-gray-400 hover:text-red-600 p-1" title="Apagar"><Trash2 size={16}/></button>
+              </div>
             </div>
           ))}
         </div>
@@ -413,14 +504,22 @@ export default function App() {
     if (res.ok) await loadData();
   };
 
+  const handleDeleteBid = async (id) => {
+    if (!confirm("Tem certeza que deseja apagar este processo?")) return;
+    try {
+      const res = await fetch(`/api/bids/${id}`, { method: 'DELETE' });
+      if (res.ok) await loadData();
+      else alert("Erro ao apagar.");
+    } catch(e) { alert("Erro de conexão."); }
+  };
+
   const handleSaveBid = async (updatedBid, shouldDeliver) => {
     if (shouldDeliver) {
       updatedBid.status = 'delivered';
       alert("Salvo! Movido para Pagamentos.");
       setCurrentPage('payments');
-    } else {
-      alert("Salvo com sucesso!");
     }
+    // Salva os dados (mesmo que seja edição simples ou mudança de status)
     await updateBidData(updatedBid, {});
   };
 
@@ -456,8 +555,8 @@ export default function App() {
           {currentPage === 'dashboard' && <Dashboard bids={bids} />}
           {currentPage === 'insert' && <InsertBid onAdd={addBid} />}
           {currentPage === 'tracking' && <ProcessTracking bids={bids} onUpdateStatus={updateBidStatus} />}
-          {currentPage === 'won' && <WonBids bids={bids} onSaveBid={handleSaveBid} />}
-          {currentPage === 'lost' && <LostBids bids={bids} />}
+          {currentPage === 'won' && <WonBids bids={bids} onSaveBid={handleSaveBid} onDeleteBid={handleDeleteBid} onStatusChange={updateBidStatus} />}
+          {currentPage === 'lost' && <LostBids bids={bids} onSaveBid={handleSaveBid} onDeleteBid={handleDeleteBid} onStatusChange={updateBidStatus} />}
           {currentPage === 'payments' && <Payments bids={bids} onUpdateBid={updateBidData} />}
           {currentPage === 'invoices' && <Invoices />}
         </main>
